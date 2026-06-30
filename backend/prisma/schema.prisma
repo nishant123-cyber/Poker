@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  username  String     @unique
+  passwordHash String
+  chipsBalance BigInt   @default(10000)
+  emailVerified Boolean @default(false)
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  ownedTables       PokerTable[]     @relation("tableCreatedBy")
+  tableParticipations TablePlayer[]
+  friends           Friend[]         @relation("userFriends")
+  friendRequests    Friend[]         @relation("friendRequests")
+  gameHistory       GameParticipant[]
+  chatMessages      ChatMessage[]
+  stats             UserStats?
+
+  @@index([email])
+  @@index([username])
+}
+
+model UserStats {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gamesPlayed Int      @default(0)
+  gamesWon   Int       @default(0)
+  totalProfit BigInt   @default(0)
+  updatedAt DateTime   @updatedAt
+
+  @@index([userId])
+}
+
+model Friend {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation("userFriends", fields: [userId], references: [id], onDelete: Cascade)
+  friendId  String
+  friend    User       @relation("friendRequests", fields: [friendId], references: [id], onDelete: Cascade)
+  status    String     @default("pending")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([userId, friendId])
+  @@index([userId])
+  @@index([friendId])
+}
+
+model PokerTable {
+  id        String     @id @default(cuid())
+  name      String
+  createdBy String
+  creator   User       @relation("tableCreatedBy", fields: [createdBy], references: [id])
+  maxPlayers Int       @default(6)
+  smallBlind BigInt
+  bigBlind  BigInt
+  buyInMin  BigInt
+  buyInMax  BigInt
+  isPrivate Boolean    @default(false)
+  status    String     @default("waiting")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  players   TablePlayer[]
+  games     Game[]
+
+  @@index([createdBy])
+  @@index([status])
+}
+
+model TablePlayer {
+  id        String     @id @default(cuid())
+  tableId   String
+  table     PokerTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chipsStack BigInt
+  seatPosition Int
+  isActive  Boolean    @default(true)
+  joinedAt  DateTime   @default(now())
+
+  gameParticipants GameParticipant[]
+
+  @@unique([tableId, userId])
+  @@index([tableId])
+  @@index([userId])
+}
+
+model Game {
+  id        String     @id @default(cuid())
+  tableId   String
+  table     PokerTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  gameNumber Int
+  status    String     @default("pending")
+  dealerId  String?
+  smallBlindPos Int
+  bigBlindPos Int
+  pot       BigInt     @default(0)
+  communityCards String @default("")
+  winnerIds String     @default("")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  participants GameParticipant[]
+  actions    GameAction[]
+
+  @@unique([tableId, gameNumber])
+  @@index([tableId])
+  @@index([status])
+}
+
+model GameParticipant {
+  id        String     @id @default(cuid())
+  gameId    String
+  game      Game       @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tablePlayerId String
+  tablePlayer TablePlayer @relation(fields: [tablePlayerId], references: [id], onDelete: Cascade)
+  holeCards String
+  startingChips BigInt
+  endingChips   BigInt
+  position  String
+  folded    Boolean    @default(false)
+  finalHand String?
+  winAmount BigInt     @default(0)
+
+  actions   GameAction[]
+
+  @@unique([gameId, userId])
+  @@index([gameId])
+  @@index([userId])
+}
+
+model GameAction {
+  id        String     @id @default(cuid())
+  gameId    String
+  game      Game       @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  participantId String
+  participant GameParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  actionType String
+  amount    BigInt     @default(0)
+  street    String
+  timestamp DateTime   @default(now())
+  actionOrder Int
+
+  @@index([gameId])
+  @@index([participantId])
+}
+
+model ChatMessage {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String
+  tableId   String?
+  gameId    String?
+  createdAt DateTime   @default(now())
+
+  @@index([userId])
+  @@index([tableId])
+  @@index([gameId])
+}
